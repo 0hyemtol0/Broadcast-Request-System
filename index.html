@@ -4,9 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>영파여자중학교 방송요청 시스템</title>
-  
   <script src="https://cdn.tailwindcss.com"></script>
-  
   <script type="importmap">
     {
       "imports": {
@@ -19,11 +17,9 @@
       }
     }
   </script>
-  
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-gray-50">
-  
   <div id="root"></div>
 
   <script type="text/babel" data-type="module">
@@ -35,12 +31,12 @@
       CheckCircle, AlertCircle, X, Shield, Key
     } from 'lucide-react';
     import { initializeApp } from 'firebase/app';
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-    import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+    import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+    import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
     // ==========================================
-    // 🌟 [1단계] Firebase 실제 연결 설정 🌟
-    // 아래 따옴표("") 안의 내용들을 발급받은 정보로 교체해주세요!
+    // 🌟 Firebase 설정 🌟
+    // 선생님의 파이어베이스 정보로 유지해주세요!
     // ==========================================
     let firebaseConfig = {
         apiKey: "AIzaSyApw-eOLuyrGb3mwIITzM1WlgAGKDV7_ZQ",
@@ -51,17 +47,11 @@
         appId: "1:214272381910:web:701dfae6067f5e45f90a77"
     };
 
-    // (미리보기 환경용 자동 설정 - 무시하셔도 됩니다)
-    const isPreviewEnvironment = typeof __firebase_config !== 'undefined';
-    if (isPreviewEnvironment) {
-      firebaseConfig = JSON.parse(__firebase_config);
-    }
+    if (typeof __firebase_config !== 'undefined') firebaseConfig = JSON.parse(__firebase_config);
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    
-    // DB에서 사용할 고유 앱 ID
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'youngpa-broadcast-system';
 
     // ==========================================
@@ -71,169 +61,70 @@
       const [user, setUser] = useState(null);
       const [authInitialized, setAuthInitialized] = useState(false);
       const [view, setView] = useState('form'); 
-      const [firebaseError, setFirebaseError] = useState(false);
-      
       const [requests, setRequests] = useState([]);
       const [isAdmin, setIsAdmin] = useState(false);
       const [adminPassword, setAdminPassword] = useState('admin'); 
-      
       const [toasts, setToasts] = useState([]);
       const [isMenuOpen, setIsMenuOpen] = useState(false);
-      
       const [showLoginModal, setShowLoginModal] = useState(false);
       const [loginIdInput, setLoginIdInput] = useState('');
       const [loginPwInput, setLoginPwInput] = useState('');
 
-      const prevRequestsLength = useRef(0);
-      const initialLoadDone = useRef(false);
-
-      // --- 1. Authentication ---
       useEffect(() => {
-        if (!isPreviewEnvironment && firebaseConfig.apiKey.includes("여기에")) {
-          setFirebaseError(true);
-          setAuthInitialized(true);
-          return;
-        }
-
         let isMounted = true;
-        const initAuth = async () => {
-          try {
-            if (isPreviewEnvironment && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
-          } catch (error) {
-            console.error("Auth init error:", error);
-            setFirebaseError(true);
-          }
-        };
-        initAuth();
-
+        signInAnonymously(auth).catch(console.error);
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-          if (isMounted) {
-            setUser(currentUser);
-            setAuthInitialized(true);
-          }
+          if (isMounted) { setUser(currentUser); setAuthInitialized(true); }
         });
-        return () => {
-          isMounted = false;
-          unsubscribe();
-        };
+        return () => { isMounted = false; unsubscribe(); };
       }, []);
 
-      // --- 2. Data Fetching ---
       useEffect(() => {
-        if (!user || firebaseError) return;
-
+        if (!user) return;
         const reqRef = collection(db, 'artifacts', appId, 'public', 'data', 'requests');
         const unsubReq = onSnapshot(reqRef, (snapshot) => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setRequests(data);
-
-          if (initialLoadDone.current && data.length > prevRequestsLength.current) {
-            const changes = snapshot.docChanges();
-            const hasNew = changes.some(change => change.type === 'added' && !change.doc.metadata.hasPendingWrites);
-            if (hasNew && isAdmin) {
-              addToast("🔔 새로운 방송 협조 요청이 도착했습니다!", "success");
-            }
-          }
-          prevRequestsLength.current = data.length;
-          initialLoadDone.current = true;
-        }, (error) => {
-            console.error("Requests fetch error:", error);
+          setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
         const authConfigRef = collection(db, 'artifacts', appId, 'public', 'data', 'settings');
         const unsubAuth = onSnapshot(authConfigRef, (snapshot) => {
           const authDoc = snapshot.docs.find(d => d.id === 'adminAuth');
-          if (authDoc && authDoc.data().password) {
-            setAdminPassword(authDoc.data().password);
-          } else {
-            setAdminPassword('admin');
-          }
+          setAdminPassword(authDoc ? authDoc.data().password : 'admin');
         });
 
         const myProfileRef = collection(db, 'artifacts', appId, 'users', user.uid, 'profile');
         const unsubProfile = onSnapshot(myProfileRef, (snapshot) => {
           const infoDoc = snapshot.docs.find(d => d.id === 'info');
-          if (infoDoc && infoDoc.data().isAdmin) {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(false);
-          }
+          setIsAdmin(infoDoc ? infoDoc.data().isAdmin : false);
         });
 
-        return () => {
-          unsubReq();
-          unsubAuth();
-          unsubProfile();
-        };
-      }, [user, isAdmin, firebaseError]); 
+        return () => { unsubReq(); unsubAuth(); unsubProfile(); };
+      }, [user, isAdmin]); 
 
-      // --- 3. Helpers ---
       const addToast = (message, type = 'info') => {
         const id = Date.now().toString() + Math.random().toString();
         setToasts(prev => [...prev, { id, message, type }]);
-        setTimeout(() => {
-          setToasts(prev => prev.filter(t => t.id !== id));
-        }, 4000);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
       };
 
-      const handleLoginClick = () => {
-        setLoginIdInput('');
-        setLoginPwInput('');
-        setShowLoginModal(true);
-        setIsMenuOpen(false);
-      };
+      const handleLoginClick = () => { setLoginIdInput(''); setLoginPwInput(''); setShowLoginModal(true); setIsMenuOpen(false); };
 
       const executeLogin = async (e) => {
         e.preventDefault();
         if (loginIdInput === 'admin' && loginPwInput === adminPassword) {
           try {
-            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info'), { 
-              isAdmin: true 
-            });
-            setShowLoginModal(false);
-            addToast("관리자 로그인 성공", "success");
-            setView('dashboard');
-          } catch (error) {
-            addToast("로그인 오류 (데이터베이스 권한을 확인해주세요)", "error");
-          }
-        } else {
-          addToast("아이디 또는 비밀번호가 일치하지 않습니다.", "error");
-        }
+            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info'), { isAdmin: true });
+            setShowLoginModal(false); addToast("관리자 로그인 성공", "success"); setView('dashboard');
+          } catch (error) { addToast("로그인 오류", "error"); }
+        } else { addToast("아이디/비밀번호 불일치", "error"); }
       };
 
       const handleLogout = async () => {
-        try {
-          await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info'), { 
-            isAdmin: false 
-          });
-          setView('form');
-          addToast("로그아웃 되었습니다.", "info");
-        } catch (error) {
-          console.error(error);
-        }
+        await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info'), { isAdmin: false });
+        setView('form'); addToast("로그아웃 되었습니다.", "info");
       };
 
-      if (!authInitialized) {
-        return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-700"></div></div>;
-      }
-
-      if (firebaseError) {
-        return (
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full text-center">
-              <div className="flex items-center justify-center w-16 h-16 mx-auto bg-red-100 rounded-full mb-4">
-                <AlertCircle className="w-8 h-8 text-red-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">데이터베이스(Firebase) 연결이 필요합니다.</h2>
-              <p className="text-gray-600 mb-6">소스 코드의 <code>firebaseConfig</code> 부분을 올바른 값으로 수정해주세요.</p>
-            </div>
-          </div>
-        );
-      }
+      if (!authInitialized) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-700"></div></div>;
 
       return (
         <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
@@ -242,136 +133,57 @@
               <div className="flex justify-between h-16">
                 <div className="flex items-center cursor-pointer" onClick={() => setView('form')}>
                   <Mic className="h-8 w-8 text-green-700 mr-2" />
-                  <span className="font-bold text-xl text-gray-900 tracking-tight">영파여자중학교 방송요청 시스템</span>
+                  <span className="font-bold text-xl text-gray-900 tracking-tight">영파여자중학교 방송요청</span>
                 </div>
                 
                 <div className="hidden sm:flex sm:items-center sm:space-x-4">
                   <button onClick={() => setView('form')} className={`px-3 py-2 rounded-md text-sm font-medium ${view === 'form' ? 'bg-green-50 text-green-800' : 'text-gray-600 hover:bg-gray-100'}`}>신청하기</button>
-                  
                   {isAdmin && (
                     <>
                       <button onClick={() => setView('dashboard')} className={`px-3 py-2 rounded-md text-sm font-medium ${view === 'dashboard' ? 'bg-green-50 text-green-800' : 'text-gray-600 hover:bg-gray-100'}`}>관리자 대시보드</button>
-                      <button onClick={() => setView('settings')} className={`px-3 py-2 rounded-md text-sm font-medium ${view === 'settings' ? 'bg-green-50 text-green-800' : 'text-gray-600 hover:bg-gray-100'}`}>설정 (비밀번호 변경)</button>
+                      <button onClick={() => setView('settings')} className={`px-3 py-2 rounded-md text-sm font-medium ${view === 'settings' ? 'bg-green-50 text-green-800' : 'text-gray-600 hover:bg-gray-100'}`}>설정</button>
                     </>
                   )}
-
                   {isAdmin ? (
                     <div className="flex items-center ml-4 border-l pl-4 border-gray-200">
                       <span className="text-sm font-semibold text-green-700 bg-green-50 px-3 py-1 rounded-full mr-4">관리자 접속중</span>
-                      <button onClick={handleLogout} className="text-gray-500 hover:text-red-600 transition-colors flex items-center" title="로그아웃">
-                        <LogOut className="h-5 w-5 mr-1" /> <span className="text-sm font-medium">로그아웃</span>
-                      </button>
+                      <button onClick={handleLogout} className="text-gray-500 hover:text-red-600 transition-colors flex items-center"><LogOut className="h-5 w-5 mr-1" /> <span className="text-sm font-medium">로그아웃</span></button>
                     </div>
                   ) : (
-                    <button onClick={handleLoginClick} className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none">
-                      <Key className="w-4 h-4 mr-2" /> 관리자 로그인
-                    </button>
+                    <button onClick={handleLoginClick} className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none"><Key className="w-4 h-4 mr-2" /> 관리자 로그인</button>
                   )}
-                </div>
-
-                <div className="flex items-center sm:hidden">
-                  <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-gray-500 hover:text-gray-700 focus:outline-none">
-                    {isMenuOpen ? <X className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-                    <span className="ml-2 text-sm">메뉴</span>
-                  </button>
                 </div>
               </div>
             </div>
-
-            {isMenuOpen && (
-              <div className="sm:hidden bg-white border-t border-gray-200 shadow-lg">
-                <div className="px-2 pt-2 pb-3 space-y-1">
-                  <button onClick={() => {setView('form'); setIsMenuOpen(false);}} className={`block w-full text-left px-3 py-2 rounded-md text-base font-medium ${view === 'form' ? 'bg-green-50 text-green-800' : 'text-gray-700 hover:bg-gray-50'}`}>신청하기</button>
-                  {isAdmin && (
-                    <>
-                      <button onClick={() => {setView('dashboard'); setIsMenuOpen(false);}} className={`block w-full text-left px-3 py-2 rounded-md text-base font-medium ${view === 'dashboard' ? 'bg-green-50 text-green-800' : 'text-gray-700 hover:bg-gray-50'}`}>관리자 대시보드</button>
-                      <button onClick={() => {setView('settings'); setIsMenuOpen(false);}} className={`block w-full text-left px-3 py-2 rounded-md text-base font-medium ${view === 'settings' ? 'bg-green-50 text-green-800' : 'text-gray-700 hover:bg-gray-50'}`}>설정 (비밀번호 변경)</button>
-                    </>
-                  )}
-                  
-                  {!isAdmin ? (
-                     <button onClick={handleLoginClick} className="block w-full text-left px-3 py-2 text-base font-medium text-green-700">관리자 로그인</button>
-                  ) : (
-                    <button onClick={() => {handleLogout(); setIsMenuOpen(false);}} className="block w-full text-left px-3 py-2 text-base font-medium text-red-600">로그아웃</button>
-                  )}
-                </div>
-              </div>
-            )}
           </nav>
 
           <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {view === 'form' && <RequestForm addToast={addToast} appId={appId} db={db} user={user} />}
             {view === 'dashboard' && isAdmin && <AdminDashboard requests={requests} db={db} appId={appId} addToast={addToast} />}
             {view === 'settings' && isAdmin && <AdminSettings db={db} appId={appId} addToast={addToast} currentPassword={adminPassword} />}
-            
             {view !== 'form' && !isAdmin && (
-              <div className="text-center py-20">
-                 <Shield className="mx-auto h-16 w-16 text-red-400 mb-4" />
-                 <h2 className="text-2xl font-bold text-gray-800">접근 권한이 없습니다</h2>
-                 <p className="text-gray-600 mt-2">이 페이지는 방송부 관리자만 접근할 수 있습니다. 상단의 로그인 버튼을 이용해주세요.</p>
-              </div>
+              <div className="text-center py-20"><Shield className="mx-auto h-16 w-16 text-red-400 mb-4" /><h2 className="text-2xl font-bold text-gray-800">접근 권한이 없습니다</h2></div>
             )}
           </main>
 
           {showLoginModal && (
             <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 px-4">
               <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-sm">
-                <div className="text-center mb-6">
-                  <div className="mx-auto bg-green-100 w-12 h-12 rounded-full flex items-center justify-center mb-3">
-                    <Key className="w-6 h-6 text-green-700" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900">관리자 로그인</h3>
-                  <p className="text-sm text-gray-500 mt-1">방송부원 전용 페이지입니다.</p>
-                </div>
-
+                <div className="text-center mb-6"><h3 className="text-xl font-bold text-gray-900">관리자 로그인</h3></div>
                 <form onSubmit={executeLogin}>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">아이디</label>
-                    <input 
-                      type="text" 
-                      value={loginIdInput} 
-                      onChange={e => setLoginIdInput(e.target.value)} 
-                      placeholder="admin"
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2.5 border bg-gray-50" 
-                      required 
-                    />
-                  </div>
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
-                    <input 
-                      type="password" 
-                      value={loginPwInput} 
-                      onChange={e => setLoginPwInput(e.target.value)} 
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2.5 border bg-gray-50" 
-                      required 
-                    />
-                  </div>
+                  <div className="mb-4"><input type="text" value={loginIdInput} onChange={e => setLoginIdInput(e.target.value)} placeholder="아이디 (admin)" className="w-full rounded-md border-gray-300 p-2.5 border" required /></div>
+                  <div className="mb-6"><input type="password" value={loginPwInput} onChange={e => setLoginPwInput(e.target.value)} placeholder="비밀번호" className="w-full rounded-md border-gray-300 p-2.5 border" required /></div>
                   <div className="flex justify-end space-x-3">
-                    <button 
-                      type="button" 
-                      onClick={() => setShowLoginModal(false)} 
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors w-full"
-                    >
-                      취소
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="px-4 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 transition-colors w-full"
-                    >
-                      로그인
-                    </button>
+                    <button type="button" onClick={() => setShowLoginModal(false)} className="px-4 py-2 bg-gray-100 rounded-md w-full">취소</button>
+                    <button type="submit" className="px-4 py-2 bg-green-700 text-white rounded-md w-full">로그인</button>
                   </div>
                 </form>
               </div>
             </div>
           )}
-
           <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
             {toasts.map(toast => (
-              <div key={toast.id} className={`flex items-center p-4 rounded-lg shadow-lg text-white transform transition-all duration-300 pointer-events-auto ${toast.type === 'success' ? 'bg-green-600' : toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
-                {toast.type === 'success' && <CheckCircle className="w-5 h-5 mr-2" />}
-                {toast.type === 'error' && <AlertCircle className="w-5 h-5 mr-2" />}
-                {toast.type === 'info' && <Bell className="w-5 h-5 mr-2" />}
+              <div key={toast.id} className={`flex items-center p-4 rounded-lg shadow-lg text-white pointer-events-auto ${toast.type === 'success' ? 'bg-green-600' : toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
                 {toast.message}
               </div>
             ))}
@@ -395,231 +207,103 @@
       const equipmentOptions = ['마이크', '컴퓨터 (PC)', '학생의자', '빔프로젝터', '스피커', '기타'];
       const broadcastTypes = ['동영상 시청', '강사 강의', '천장스피커만 사용', '행사 생중계(방송실에서 카메라 사용)', '기타'];
 
-      const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-      };
-
-      const handleEquipmentChange = (eq) => {
-        setFormData(prev => {
-          if (prev.equipment.includes(eq)) {
-            return { ...prev, equipment: prev.equipment.filter(i => i !== eq) };
-          } else {
-            return { ...prev, equipment: [...prev.equipment, eq] };
-          }
-        });
-      };
+      const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+      const handleEquipmentChange = (eq) => setFormData(prev => ({ ...prev, equipment: prev.equipment.includes(eq) ? prev.equipment.filter(i => i !== eq) : [...prev.equipment, eq] }));
 
       const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!user) {
-          addToast("데이터베이스 오류: 설정을 확인해주세요.", "error");
-          return;
-        }
-
-        if (!formData.broadcastDate || !formData.startTime || !formData.endTime || !formData.content || !formData.requester) {
-          addToast("필수 항목을 모두 입력해주세요.", "error");
-          return;
-        }
-
         setIsSubmitting(true);
         try {
-          const docRef = collection(db, 'artifacts', appId, 'public', 'data', 'requests');
-          
           const submitData = {
             ...formData,
             department: formData.department === '기타' ? formData.customDepartment : formData.department,
             broadcastType: formData.broadcastType === '기타' ? formData.customBroadcastType : formData.broadcastType,
-            status: '대기중',
-            createdAt: serverTimestamp(),
-            submitterId: user.uid
+            status: '대기중', createdAt: serverTimestamp(), submitterId: user.uid
           };
-          delete submitData.customDepartment;
-          delete submitData.customBroadcastType;
+          delete submitData.customDepartment; delete submitData.customBroadcastType;
 
-          await addDoc(docRef, submitData);
+          // 1. 파이어베이스에 요청서 저장
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'requests'), submitData);
           
+          // ==============================================================
+          // 🌟 [2단계] EmailJS 알림 메일 발송 🌟
+          // 가입 후 발급받은 3가지 정보를 아래 따옴표 안에 넣어주세요!
+          // ==============================================================
+          const EMAILJS_SERVICE_ID = "service_p2n8n7d"; 
+          const EMAILJS_TEMPLATE_ID = "template_eh0fcth"; 
+          const EMAILJS_PUBLIC_KEY = "XEI6VfPg_XkMB1uij";   
+
+          if(EMAILJS_SERVICE_ID !== "service_p2n8n7d") {
+            try {
+              await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  service_id: EMAILJS_SERVICE_ID,
+                  template_id: EMAILJS_TEMPLATE_ID,
+                  user_id: EMAILJS_PUBLIC_KEY,
+                  template_params: {
+                    to_email: 'uliya@youngpa.sen.ms.kr', // 선생님께서 요청하신 고정 메일 주소
+                    department: submitData.department, // 의뢰부서
+                    requester: submitData.requester,   // 담당자
+                    broadcastDate: submitData.broadcastDate // 방송일
+                  }
+                })
+              });
+            } catch (err) {
+              console.error("이메일 발송 실패", err);
+            }
+          }
+
           addToast("방송 협조 요청이 성공적으로 접수되었습니다.", "success");
-          setFormData({
-            broadcastDate: '', startTime: '', endTime: '', content: '', department: '교무기획부', customDepartment: '',
-            requester: '', audience: '', location: '', broadcastType: '동영상 시청', customBroadcastType: '',
-            equipment: [], scriptType: '필요없음', customScript: '', materialLink: '', fileDescription: '', remarks: ''
-          });
-        } catch (error) {
-          console.error(error);
-          addToast("제출 중 오류가 발생했습니다.", "error");
-        } finally {
-          setIsSubmitting(false);
-        }
+          setFormData({ broadcastDate: '', startTime: '', endTime: '', content: '', department: '교무기획부', customDepartment: '', requester: '', audience: '', location: '', broadcastType: '동영상 시청', customBroadcastType: '', equipment: [], scriptType: '필요없음', customScript: '', materialLink: '', fileDescription: '', remarks: '' });
+        } catch (error) { addToast("제출 중 오류가 발생했습니다.", "error"); } 
+        finally { setIsSubmitting(false); }
       };
 
       return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden max-w-4xl mx-auto">
-          <div className="bg-green-700 px-6 py-8 text-white text-center">
-            <h1 className="text-3xl font-bold mb-2">방송 협조 요청서</h1>
-            <p className="text-green-100">원활한 방송 진행을 위해 필요한 내용을 상세히 입력해 주세요.</p>
-          </div>
-
+          <div className="bg-green-700 px-6 py-8 text-white text-center"><h1 className="text-3xl font-bold mb-2">방송 협조 요청서</h1></div>
           <form onSubmit={handleSubmit} className="p-6 sm:p-10 space-y-8">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4 flex items-center">
-                <Calendar className="w-5 h-5 mr-2 text-green-700" /> 기본 일정 및 정보 <span className="text-red-500 ml-1 text-sm">*필수</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">방송일 *</label>
-                  <input type="date" name="broadcastDate" value={formData.broadcastDate} onChange={handleChange} required className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">시작 시간 *</label>
-                  <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} required className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">종료 예정 시간 *</label>
-                  <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} required className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                </div>
-                
-                <div className="md:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">방송 내용 (목적) *</label>
-                  <textarea name="content" value={formData.content} onChange={handleChange} required rows={2} placeholder="예: 학부모 총회 실시간 중계, 2학년 영어 듣기평가" className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border"></textarea>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">의뢰 부서</label>
-                  <select name="department" value={formData.department} onChange={handleChange} className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border bg-white">
-                    {departmentOptions.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                  </select>
-                  {formData.department === '기타' && (
-                    <input type="text" name="customDepartment" value={formData.customDepartment} onChange={handleChange} placeholder="부서명을 직접 입력" className="mt-2 w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">담당자 (성함) *</label>
-                  <input type="text" name="requester" value={formData.requester} onChange={handleChange} required placeholder="홍길동 선생님" className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">연락처 (내선/휴대폰)</label>
-                  <input type="text" name="contact" onChange={handleChange} placeholder="내선 123" className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div><label className="block text-sm font-medium mb-1">방송일 *</label><input type="date" name="broadcastDate" value={formData.broadcastDate} onChange={handleChange} required className="w-full rounded-md border-gray-300 p-2 border" /></div>
+              <div><label className="block text-sm font-medium mb-1">시작 시간 *</label><input type="time" name="startTime" value={formData.startTime} onChange={handleChange} required className="w-full rounded-md border-gray-300 p-2 border" /></div>
+              <div><label className="block text-sm font-medium mb-1">종료 시간 *</label><input type="time" name="endTime" value={formData.endTime} onChange={handleChange} required className="w-full rounded-md border-gray-300 p-2 border" /></div>
+              <div className="md:col-span-3"><label className="block text-sm font-medium mb-1">방송 내용 *</label><textarea name="content" value={formData.content} onChange={handleChange} required rows={2} className="w-full rounded-md border-gray-300 p-2 border"></textarea></div>
+              <div>
+                <label className="block text-sm font-medium mb-1">의뢰 부서</label>
+                <select name="department" value={formData.department} onChange={handleChange} className="w-full rounded-md border-gray-300 p-2 border bg-white">{departmentOptions.map(d => <option key={d}>{d}</option>)}</select>
+                {formData.department === '기타' && <input type="text" name="customDepartment" value={formData.customDepartment} onChange={handleChange} placeholder="직접 입력" className="mt-2 w-full rounded-md border-gray-300 p-2 border" />}
+              </div>
+              <div><label className="block text-sm font-medium mb-1">담당자 *</label><input type="text" name="requester" value={formData.requester} onChange={handleChange} required className="w-full rounded-md border-gray-300 p-2 border" /></div>
+              <div><label className="block text-sm font-medium mb-1">연락처</label><input type="text" name="contact" onChange={handleChange} className="w-full rounded-md border-gray-300 p-2 border" /></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div><label className="block text-sm font-medium mb-1">방송 대상</label><input type="text" name="audience" value={formData.audience} onChange={handleChange} className="w-full rounded-md border-gray-300 p-2 border" /></div>
+              <div><label className="block text-sm font-medium mb-1">장소</label><input type="text" name="location" value={formData.location} onChange={handleChange} className="w-full rounded-md border-gray-300 p-2 border" /></div>
+              <div>
+                <label className="block text-sm font-medium mb-1">방송 형태</label>
+                <select name="broadcastType" value={formData.broadcastType} onChange={handleChange} className="w-full rounded-md border-gray-300 p-2 border bg-white">{broadcastTypes.map(t => <option key={t}>{t}</option>)}</select>
+                {formData.broadcastType === '기타' && <input type="text" name="customBroadcastType" value={formData.customBroadcastType} onChange={handleChange} placeholder="직접 입력" className="mt-2 w-full rounded-md border-gray-300 p-2 border" />}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">필요 준비물</label>
+                <div className="flex flex-wrap gap-3">{equipmentOptions.map(eq => <label key={eq} className="inline-flex items-center"><input type="checkbox" checked={formData.equipment.includes(eq)} onChange={() => handleEquipmentChange(eq)} className="rounded border-gray-300 text-green-700 h-4 w-4"/><span className="ml-2 text-sm">{eq}</span></label>)}</div>
               </div>
             </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4 flex items-center">
-                <MapPin className="w-5 h-5 mr-2 text-green-700" /> 방송 환경
-              </h3>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium mb-2">아나운서 멘트</label>
+                <div className="flex gap-4 mb-3">{['필요없음', '기본양식', '직접작성'].map(t => <label key={t} className="inline-flex items-center"><input type="radio" name="scriptType" value={t} checked={formData.scriptType === t} onChange={handleChange} className="text-green-700 h-4 w-4"/><span className="ml-2 text-sm">{t}</span></label>)}</div>
+                {formData.scriptType === '직접작성' && <textarea name="customScript" value={formData.customScript} onChange={handleChange} rows={2} className="w-full rounded-md border-gray-300 p-2 border mt-2"></textarea>}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">방송 대상</label>
-                  <input type="text" name="audience" value={formData.audience} onChange={handleChange} placeholder="예: 전교생, 1학년 3반~5반" className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">장소</label>
-                  <input type="text" name="location" value={formData.location} onChange={handleChange} placeholder="예: 시청각실, 체육관, 각 반 교실" className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">방송 형태(자세한 내용은 비고에 적어주세요)</label>
-                  <select name="broadcastType" value={formData.broadcastType} onChange={handleChange} className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border bg-white">
-                    {broadcastTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                  </select>
-                  {formData.broadcastType === '기타' && (
-                    <input type="text" name="customBroadcastType" value={formData.customBroadcastType} onChange={handleChange} placeholder="방송 형태를 직접 입력" className="mt-2 w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">필요 준비물</label>
-                  <div className="flex flex-wrap gap-3">
-                    {equipmentOptions.map(eq => (
-                      <label key={eq} className="inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={formData.equipment.includes(eq)}
-                          onChange={() => handleEquipmentChange(eq)}
-                          className="rounded border-gray-300 text-green-700 focus:ring-green-600 h-4 w-4"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">{eq}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                <div><label className="block text-sm font-medium mb-1">방송 자료 링크</label><input type="url" name="materialLink" value={formData.materialLink} onChange={handleChange} className="w-full rounded-md border-gray-300 p-2 border" /></div>
+                <div><label className="block text-sm font-medium mb-1">기타 자료/파일 설명</label><input type="text" name="fileDescription" value={formData.fileDescription} onChange={handleChange} className="w-full rounded-md border-gray-300 p-2 border" /></div>
               </div>
+              <div><label className="block text-sm font-medium mb-1">비고 (기타 요청사항)</label><textarea name="remarks" value={formData.remarks} onChange={handleChange} rows={2} className="w-full rounded-md border-gray-300 p-2 border"></textarea></div>
             </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4 flex items-center">
-                <FileText className="w-5 h-5 mr-2 text-green-700" /> 세부 내용 및 자료
-              </h3>
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">아나운서 멘트</label>
-                  <div className="flex gap-4 mb-3">
-                    {['필요없음', '기본양식', '직접작성'].map(type => (
-                      <label key={type} className="inline-flex items-center cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name="scriptType" 
-                          value={type}
-                          checked={formData.scriptType === type}
-                          onChange={handleChange}
-                          className="border-gray-300 text-green-700 focus:ring-green-600 h-4 w-4"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">{type}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {formData.scriptType === '직접작성' && (
-                    <textarea 
-                      name="customScript" 
-                      value={formData.customScript} 
-                      onChange={handleChange} 
-                      placeholder="아나운서가 읽을 멘트를 정확히 적어주세요." 
-                      rows={3} 
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border mt-2"
-                    ></textarea>
-                  )}
-                  {formData.scriptType === '기본양식' && (
-                    <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-md border border-gray-200">
-                      <p>안내방송 기본 양식 적용 (예: "잠시 후 [내용] 관련 방송이 있을 예정입니다. 학생 여러분들은 자리에 착석해주시기 바랍니다.")</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">방송 자료 링크 (유튜브, 구글 드라이브 등)</label>
-                    <div className="flex rounded-md shadow-sm">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
-                        URL
-                      </span>
-                      <input type="url" name="materialLink" value={formData.materialLink} onChange={handleChange} placeholder="https://" className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border-gray-300 focus:ring-green-600 focus:border-green-600 border sm:text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">기타 자료/파일 설명</label>
-                    <input type="text" name="fileDescription" value={formData.fileDescription} onChange={handleChange} placeholder="예: USB로 PPT 파일 직접 전달 예정" className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border" />
-                  </div>
-                </div>
-                
-                <div className="pt-2 border-t border-gray-100">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">비고 (기타 요청/참고사항)</label>
-                  <textarea name="remarks" value={formData.remarks} onChange={handleChange} placeholder="추가로 전달할 요청사항이나 참고사항이 있다면 자유롭게 적어주세요." rows={2} className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border"></textarea>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 flex justify-end">
-              <button 
-                type="submit" 
-                disabled={isSubmitting}
-                className={`inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-700 hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 shadow-md ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center"><div className="animate-spin mr-2 h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> 전송 중...</span>
-                ) : (
-                  <span className="flex items-center"><Send className="mr-2 h-5 w-5" /> 방송 요청서 제출</span>
-                )}
-              </button>
-            </div>
+            <div className="pt-4 flex justify-end"><button type="submit" disabled={isSubmitting} className="px-8 py-3 bg-green-700 text-white rounded-md">{isSubmitting ? '전송 중...' : '방송 요청서 제출'}</button></div>
           </form>
         </div>
       );
@@ -632,309 +316,85 @@
       const [filter, setFilter] = useState('all'); 
       const [expandedId, setExpandedId] = useState(null);
 
-      const sortedRequests = useMemo(() => {
-        return [...requests]
-          .filter(r => filter === 'all' ? true : r.status === filter)
-          .sort((a, b) => {
-            const dateA = new Date(`${a.broadcastDate}T${a.startTime}`);
-            const dateB = new Date(`${b.broadcastDate}T${b.startTime}`);
-            return dateA - dateB;
-          });
-      }, [requests, filter]);
+      const sortedRequests = useMemo(() => requests.filter(r => filter === 'all' ? true : r.status === filter).sort((a, b) => new Date(`${a.broadcastDate}T${a.startTime}`) - new Date(`${b.broadcastDate}T${b.startTime}`)), [requests, filter]);
 
       const updateStatus = async (id, newStatus) => {
-        try {
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'requests', id);
-          await updateDoc(docRef, { status: newStatus });
-          addToast(`상태가 '${newStatus}'(으)로 변경되었습니다.`, "success");
-        } catch (error) {
-          console.error(error);
-          addToast("상태 업데이트 실패", "error");
-        }
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'requests', id), { status: newStatus });
+        addToast(`상태가 변경되었습니다.`, "success");
       };
 
       const deleteRequest = async (id) => {
-        try {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'requests', id));
-          addToast("요청이 삭제되었습니다.", "success");
-        } catch (error) {
-          addToast("삭제 실패", "error");
-        }
-      };
-
-      const StatusBadge = ({ status }) => {
-        const styles = {
-          '대기중': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-          '승인됨': 'bg-teal-100 text-teal-800 border-teal-200',
-          '완료': 'bg-emerald-100 text-emerald-800 border-emerald-200',
-          '반려': 'bg-red-100 text-red-800 border-red-200'
-        };
-        return (
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
-            {status}
-          </span>
-        );
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'requests', id));
+        addToast("요청이 삭제되었습니다.", "success");
       };
 
       return (
         <div className="space-y-6 max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                <Video className="w-6 h-6 mr-2 text-green-700" /> 방송 요청 관리
-              </h2>
-              <p className="text-gray-500 mt-1 text-sm">전체 요청을 확인하고 일정을 조율합니다.</p>
-            </div>
-            
-            <div className="mt-4 sm:mt-0 flex space-x-2">
-              {['all', '대기중', '승인됨', '완료'].map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${filter === f ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                >
-                  {f === 'all' ? '전체' : f}
-                </button>
-              ))}
-            </div>
+          <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-gray-100">
+            <h2 className="text-2xl font-bold flex items-center"><Video className="w-6 h-6 mr-2 text-green-700" /> 방송 요청 관리</h2>
+            <div className="flex space-x-2">{['all', '대기중', '승인됨', '완료'].map(f => <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-md text-sm ${filter === f ? 'bg-green-700 text-white' : 'bg-gray-100'}`}>{f === 'all' ? '전체' : f}</button>)}</div>
           </div>
-
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            {sortedRequests.length === 0 ? (
-              <div className="p-10 text-center text-gray-500">
-                 해당하는 방송 요청이 없습니다.
-              </div>
-            ) : (
-              <ul className="divide-y divide-gray-200">
-                {sortedRequests.map(req => (
-                  <li key={req.id} className="hover:bg-gray-50 transition-colors">
-                    <div 
-                      className="px-6 py-5 cursor-pointer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-                      onClick={() => setExpandedId(expandedId === req.id ? null : req.id)}
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-1">
-                          <StatusBadge status={req.status} />
-                          <span className="text-sm font-semibold text-gray-500">{req.broadcastDate}</span>
-                          <span className="text-sm text-gray-500 flex items-center"><Clock className="w-3.5 h-3.5 mr-1"/> {req.startTime} ~ {req.endTime}</span>
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900 line-clamp-1">{req.content}</h3>
-                        <div className="text-sm text-gray-600 mt-1 flex items-center space-x-4">
-                          <span className="flex items-center"><Users className="w-4 h-4 mr-1 text-gray-400"/> {req.department} {req.requester}</span>
-                          <span className="flex items-center"><MapPin className="w-4 h-4 mr-1 text-gray-400"/> {req.location || '미정'}</span>
-                        </div>
+            <ul className="divide-y divide-gray-200">
+              {sortedRequests.map(req => (
+                <li key={req.id} className="hover:bg-gray-50">
+                  <div className="px-6 py-5 cursor-pointer flex justify-between items-center" onClick={() => setExpandedId(expandedId === req.id ? null : req.id)}>
+                    <div>
+                      <div className="flex items-center space-x-3 mb-1">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs border bg-gray-100">{req.status}</span>
+                        <span className="text-sm text-gray-500">{req.broadcastDate}</span>
                       </div>
-                      
-                      <div className="flex space-x-2" onClick={e => e.stopPropagation()}>
-                        {req.status === '대기중' && (
-                          <button onClick={() => updateStatus(req.id, '승인됨')} className="px-3 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100 rounded text-sm font-medium transition-colors">승인</button>
-                        )}
-                        {req.status === '승인됨' && (
-                          <>
-                            <button onClick={() => updateStatus(req.id, '대기중')} className="px-3 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded text-sm font-medium transition-colors">승인 취소</button>
-                            <button onClick={() => updateStatus(req.id, '완료')} className="px-3 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-sm font-medium transition-colors">완료처리</button>
-                          </>
-                        )}
-                        {req.status === '완료' && (
-                          <button onClick={() => updateStatus(req.id, '승인됨')} className="px-3 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded text-sm font-medium transition-colors">완료 취소</button>
-                        )}
-                      </div>
+                      <h3 className="text-lg font-bold">{req.content}</h3>
+                      <div className="text-sm text-gray-600 mt-1 flex space-x-4"><span>{req.department} {req.requester}</span><span>{req.broadcastType}</span></div>
                     </div>
-
-                    {expandedId === req.id && (
-                      <div className="px-6 py-5 bg-green-50/50 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <div>
-                            <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">상세 내용</span>
-                            <p className="text-gray-800 bg-white p-3 rounded border border-gray-200 text-sm whitespace-pre-wrap">{req.content}</p>
-                          </div>
-                          {req.remarks && (
-                            <div>
-                              <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">비고 (요청/참고사항)</span>
-                              <p className="text-gray-800 bg-white p-3 rounded border border-gray-200 text-sm whitespace-pre-wrap">{req.remarks}</p>
-                            </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-4 bg-white p-3 rounded border border-gray-200">
-                            <div>
-                              <span className="block text-xs text-gray-500">방송 형태</span>
-                              <span className="text-sm font-medium">{req.broadcastType}</span>
-                            </div>
-                            <div>
-                              <span className="block text-xs text-gray-500">방송 대상</span>
-                              <span className="text-sm font-medium">{req.audience || '-'}</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-4">
-                          <div className="bg-white p-3 rounded border border-gray-200">
-                             <span className="block text-xs text-gray-500 mb-2">필요 준비물</span>
-                             <div className="flex flex-wrap gap-2">
-                                {req.equipment?.length > 0 ? req.equipment.map(eq => (
-                                   <span key={eq} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">{eq}</span>
-                                )) : <span className="text-sm text-gray-400">없음</span>}
-                             </div>
-                          </div>
-                          
-                          <div className="bg-white p-3 rounded border border-gray-200 space-y-2">
-                            <div>
-                              <span className="block text-xs text-gray-500">아나운서 멘트 ({req.scriptType})</span>
-                              {req.scriptType === '직접작성' && <p className="text-sm mt-1 text-gray-700 bg-gray-50 p-2 rounded">{req.customScript}</p>}
-                            </div>
-                            <div className="pt-2 border-t border-gray-100">
-                              <span className="block text-xs text-gray-500">자료 링크</span>
-                              {req.materialLink ? (
-                                <a href={req.materialLink} target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline text-sm truncate block">{req.materialLink}</a>
-                              ) : <span className="text-sm text-gray-400">없음</span>}
-                            </div>
-                            <div className="pt-2 border-t border-gray-100">
-                               <span className="block text-xs text-gray-500">파일 전달 방식</span>
-                               <span className="text-sm">{req.fileDescription || '-'}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end space-x-2 pt-2">
-                            <select 
-                              value={req.status} 
-                              onChange={(e) => updateStatus(req.id, e.target.value)}
-                              className="text-sm border-gray-300 rounded p-1.5 focus:ring-green-600 focus:border-green-600"
-                            >
-                              <option value="대기중">대기중으로 변경</option>
-                              <option value="승인됨">승인됨으로 변경</option>
-                              <option value="완료">완료로 변경</option>
-                              <option value="반려">반려</option>
-                            </select>
-                            <button onClick={() => deleteRequest(req.id)} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded text-sm font-medium transition-colors flex items-center">
-                              <Trash2 className="w-4 h-4 mr-1" /> 삭제
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+                    <div className="flex space-x-2" onClick={e => e.stopPropagation()}>
+                        {req.status === '대기중' && <button onClick={() => updateStatus(req.id, '승인됨')} className="px-3 py-1 bg-teal-50 text-teal-700 rounded text-sm">승인</button>}
+                        {req.status === '승인됨' && <><button onClick={() => updateStatus(req.id, '대기중')} className="px-3 py-1 bg-gray-100 rounded text-sm">승인 취소</button><button onClick={() => updateStatus(req.id, '완료')} className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded text-sm">완료처리</button></>}
+                        {req.status === '완료' && <button onClick={() => updateStatus(req.id, '승인됨')} className="px-3 py-1 bg-gray-100 rounded text-sm">완료 취소</button>}
+                    </div>
+                  </div>
+                  {expandedId === req.id && (
+                     <div className="px-6 py-5 bg-green-50/50 border-t border-gray-100">
+                        <p className="text-sm bg-white p-3 rounded mb-2"><b>장소:</b> {req.location} | <b>시간:</b> {req.startTime}~{req.endTime}</p>
+                        <p className="text-sm bg-white p-3 rounded mb-2"><b>준비물:</b> {req.equipment?.join(', ')}</p>
+                        <p className="text-sm bg-white p-3 rounded mb-2"><b>멘트 ({req.scriptType}):</b> {req.customScript}</p>
+                        <p className="text-sm bg-white p-3 rounded mb-2"><b>비고:</b> {req.remarks}</p>
+                        <div className="flex justify-end pt-2"><button onClick={() => deleteRequest(req.id)} className="px-3 py-1 bg-red-50 text-red-600 rounded text-sm">삭제</button></div>
+                     </div>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       );
     }
 
     // ==========================================
-    // Admin Settings Component
+    // Admin Settings Component (이메일 등록 폼 제거됨)
     // ==========================================
     function AdminSettings({ db, appId, addToast, currentPassword }) {
-      const [oldPw, setOldPw] = useState('');
       const [newPw, setNewPw] = useState('');
-      const [confirmPw, setConfirmPw] = useState('');
-      const [isUpdating, setIsUpdating] = useState(false);
 
       const handleChangePassword = async (e) => {
         e.preventDefault();
-        
-        if (oldPw !== currentPassword) {
-          addToast("현재 비밀번호가 일치하지 않습니다.", "error");
-          return;
-        }
-        if (newPw !== confirmPw) {
-          addToast("새 비밀번호와 확인 비밀번호가 다릅니다.", "error");
-          return;
-        }
-        if (newPw.length < 4) {
-          addToast("비밀번호는 4자리 이상이어야 합니다.", "error");
-          return;
-        }
-
-        setIsUpdating(true);
-        try {
-          const authDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'adminAuth');
-          await setDoc(authDocRef, {
-            password: newPw,
-            updatedAt: serverTimestamp()
-          });
-          
-          addToast("비밀번호가 성공적으로 변경되었습니다.", "success");
-          setOldPw('');
-          setNewPw('');
-          setConfirmPw('');
-        } catch (error) {
-          addToast("비밀번호 변경 실패", "error");
-        } finally {
-          setIsUpdating(false);
-        }
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'adminAuth'), { password: newPw });
+        addToast("비밀번호가 변경되었습니다.", "success"); setNewPw('');
       };
 
       return (
         <div className="max-w-2xl mx-auto space-y-6">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center mb-2">
-              <Settings className="w-6 h-6 mr-2 text-green-700" /> 관리자 설정
-            </h2>
-            <p className="text-gray-500 text-sm">방송부 관리자 공용 비밀번호를 변경할 수 있습니다.</p>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-6 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center"><Key className="w-5 h-5 mr-2 text-green-600" />비밀번호 변경</h3>
-              
-              <form onSubmit={handleChangePassword} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">현재 관리자 아이디</label>
-                  <input type="text" value="admin" disabled className="w-full rounded-md border-gray-300 bg-gray-100 text-gray-500 p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">현재 비밀번호</label>
-                  <input 
-                    type="password" 
-                    value={oldPw}
-                    onChange={(e) => setOldPw(e.target.value)}
-                    placeholder="현재 사용중인 비밀번호 입력" 
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border"
-                    required
-                  />
-                </div>
-                <div className="pt-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">새 비밀번호</label>
-                  <input 
-                    type="password" 
-                    value={newPw}
-                    onChange={(e) => setNewPw(e.target.value)}
-                    placeholder="새로운 비밀번호 (4자리 이상)" 
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">새 비밀번호 확인</label>
-                  <input 
-                    type="password" 
-                    value={confirmPw}
-                    onChange={(e) => setConfirmPw(e.target.value)}
-                    placeholder="새로운 비밀번호 다시 입력" 
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 p-2 border"
-                    required
-                  />
-                </div>
-                
-                <div className="pt-4 flex justify-end">
-                  <button 
-                    type="submit" 
-                    disabled={isUpdating}
-                    className="inline-flex items-center px-6 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 disabled:opacity-50 font-medium"
-                  >
-                    {isUpdating ? '변경 중...' : '비밀번호 변경 완료'}
-                  </button>
-                </div>
-              </form>
-            </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200">
+            <h3 className="text-lg font-bold mb-4 flex items-center"><Key className="w-5 h-5 mr-2 text-green-600"/> 비밀번호 변경</h3>
+            <form onSubmit={handleChangePassword} className="flex gap-2">
+              <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호" className="flex-1 border p-2 rounded" required />
+              <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded">변경</button>
+            </form>
           </div>
         </div>
       );
     }
 
-    // ==========================================
-    // 앱 렌더링 시작
-    // ==========================================
     const root = createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
