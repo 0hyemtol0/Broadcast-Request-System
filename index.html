@@ -34,7 +34,7 @@
       Send, Bell, Settings, LogOut, Trash2, 
       CheckCircle, AlertCircle, X, Shield, Key
     } from 'lucide-react';
-    import { initializeApp } from 'firebase/app';
+    import { initializeApp } from "firebase/app";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
     import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -42,14 +42,14 @@
     // 🌟 [1단계] Firebase 실제 연결 설정 🌟
     // 아래 따옴표("") 안의 내용들을 발급받은 정보로 교체해주세요!
     // ==========================================
-    let firebaseConfig = {
-        apiKey: "AIzaSyApw-eOLuyrGb3mwIITzM1WlgAGKDV7_ZQ",
-        authDomain: "yp-broadcast.firebaseapp.com",
-        projectId: "yp-broadcast",
-        storageBucket: "yp-broadcast.firebasestorage.app",
-        messagingSenderId: "214272381910",
-        appId: "1:214272381910:web:701dfae6067f5e45f90a77"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyApw-eOLuyrGb3mwIITzM1WlgAGKDV7_ZQ",
+  authDomain: "yp-broadcast.firebaseapp.com",
+  projectId: "yp-broadcast",
+  storageBucket: "yp-broadcast.firebasestorage.app",
+  messagingSenderId: "214272381910",
+  appId: "1:214272381910:web:701dfae6067f5e45f90a77"
+};
 
     // (미리보기 환경용 자동 설정 - 무시하셔도 됩니다)
     const isPreviewEnvironment = typeof __firebase_config !== 'undefined';
